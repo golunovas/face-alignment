@@ -216,6 +216,59 @@ class FaceAlignment:
 
         return landmarks
 
+    def get_landmarks(self, input_image, rect):
+        if isinstance(input_image, str):
+            try:
+                image = io.imread(input_image)
+            except IOError:
+                print("error opening file :: ", input_image)
+                return None
+        else:
+            image = input_image
+            
+        landmarks = []
+        center = torch.FloatTensor(
+            [rect.right() - (rect.right() - rect.left()) / 2.0, rect.bottom() -
+             (rect.bottom() - rect.top()) / 2.0])
+        center[1] = center[1] - (rect.bottom() - rect.top()) * 0.1
+        scale = (rect.right() - rect.left() + rect.bottom() - rect.top()) / 200.0
+
+        inp = crop(image, center, scale)
+        inp = torch.from_numpy(inp.transpose(
+            (2, 0, 1))).float().div(255.0).unsqueeze_(0)
+
+        if self.enable_cuda:
+            inp = inp.cuda()
+
+        out = self.face_alignemnt_net(
+            Variable(inp, volatile=True))[-1].data.cpu()
+        if self.flip_input:
+            out += flip(self.face_alignemnt_net(Variable(flip(inp),
+                                                         volatile=True))[-1].data.cpu(), is_label=True)
+
+        pts, pts_img = get_preds_fromhm(out, center, scale)
+        pts, pts_img = pts.view(68, 2) * 4, pts_img.view(68, 2)
+
+        if self.landmarks_type == LandmarksType._3D:
+            heatmaps = np.zeros((68, 256, 256))
+            for i in range(68):
+                if pts[i, 0] > 0:
+                    heatmaps[i] = draw_gaussian(heatmaps[i], pts[i], 2)
+            heatmaps = torch.from_numpy(
+                heatmaps).view(1, 68, 256, 256).float()
+            if self.enable_cuda:
+                heatmaps = heatmaps.cuda()
+            depth_pred = self.depth_prediciton_net(
+                Variable(
+                    torch.cat(
+                        (inp, heatmaps), 1), volatile=True)).data.cpu().view(
+                68, 1)
+            pts_img = torch.cat(
+                (pts_img, depth_pred * (1.0 / (256.0 / (200.0 * scale)))), 1)
+
+        landmarks.append(pts_img.numpy())
+        return landmarks
+
     def process_folder(self, path, all_faces=False):
         types = ('*.jpg', '.png')
         images_list = []

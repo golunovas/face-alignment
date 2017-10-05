@@ -1,1 +1,1 @@
-docker run -it -v "$(pwd)"/:/workspace/face-alignment face-alignment
+nvidia-docker run -it -v "$(pwd)"/:/workspace/face-alignment face-alignment
