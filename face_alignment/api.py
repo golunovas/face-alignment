@@ -216,7 +216,7 @@ class FaceAlignment:
 
         return landmarks
 
-    def get_landmarks(self, input_image, rect):
+    def get_landmarks_with_rect(self, input_image, rect):
         if isinstance(input_image, str):
             try:
                 image = io.imread(input_image)

@@ -12,6 +12,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
          ca-certificates \
          libboost-all-dev \
          libjpeg-dev \
+         libglib2.0-0 \
+         libsm6 libxrender1 libfontconfig1 \
+         python-qt4 \
          libpng-dev &&\
      rm -rf /var/lib/apt/lists/*
 
@@ -30,4 +33,7 @@ RUN conda install pytorch torchvision cuda80 -c soumith
 WORKDIR /workspace
 RUN chmod -R a+w /workspace
 RUN git clone --recursive https://github.com/pytorch/pytorch && cd pytorch && python setup.py install
+WORKDIR /workspace
+RUN git clone https://github.com/golunovas/face-alignment && cd face-alignment &&  pip install -r requirements.txt && \
+    python setup.py install
 
