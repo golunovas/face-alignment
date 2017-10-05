@@ -26,10 +26,8 @@ ENV PATH /opt/conda/envs/pytorch-py35/bin:$PATH
 RUN conda install --name pytorch-py35 -c soumith magma-cuda80
 RUN conda install pytorch torchvision cuda80 -c soumith
 
-# Install face-alignment package
+# Create workspace folder and install pytorch
 WORKDIR /workspace
 RUN chmod -R a+w /workspace
-RUN git clone https://github.com/1adrianb/face-alignment
-WORKDIR /workspace/face-alignment
-RUN pip install -r requirements.txt
-RUN python setup.py install
+RUN git clone --recursive https://github.com/pytorch/pytorch && cd pytorch && python setup.py install
+
