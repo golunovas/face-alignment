@@ -81,7 +81,7 @@ def crop(image, center, scale, resolution=256.0):
     """ Crops the image around the center. Input is expected to be an np.ndarray """
     ul = transform([1, 1], center, scale, resolution, True)
     br = transform([resolution, resolution], center, scale, resolution, True)
-    pad = math.ceil(torch.norm((ul - br).float()) / 2.0 - (br[0] - ul[0]) / 2.0)
+    # pad = math.ceil(torch.norm((ul - br).float()) / 2.0 - (br[0] - ul[0]) / 2.0)
     if image.ndim > 2:
         newDim = np.array([br[1] - ul[1], br[0] - ul[0],
                            image.shape[2]], dtype=np.int32)
@@ -107,23 +107,22 @@ def crop(image, center, scale, resolution=256.0):
 def get_preds_fromhm(hm, center=None, scale=None):
     max, idx = torch.max(
         hm.view(hm.size(0), hm.size(1), hm.size(2) * hm.size(3)), 2)
+    idx += 1
     preds = idx.view(idx.size(0), idx.size(1), 1).repeat(1, 1, 2).float()
     preds[..., 0].apply_(lambda x: (x - 1) % hm.size(3) + 1)
-    preds[..., 1].add_(-1).div_(hm.size(2)).floor().add_(1)
+    preds[..., 1].add_(-1).div_(hm.size(2)).floor_().add_(1)
 
     for i in range(preds.size(0)):
         for j in range(preds.size(1)):
             hm_ = hm[i, j, :]
-            pX, pY = preds[i, j, 0], preds[i, j, 1]
-            if pX > 1 and pX < 64 and pY > 1 and pY < 64:
+            pX, pY = int(preds[i, j, 0]) - 1, int(preds[i, j, 1]) - 1
+            if pX > 0 and pX < 63 and pY > 0 and pY < 63:
                 diff = torch.FloatTensor(
-                    [hm_[int(pY),
-                         int(pX) + 1] - hm_[int(pY),
-                                            int(pX) - 1],
-                     hm_[int(pY) + 1, int(pX)] - hm_[int(pY) - 1, int(pX)]])
-                preds[i, j].add(diff.sign().mul(.25))
+                    [hm_[pY, pX + 1] - hm_[pY, pX - 1],
+                     hm_[pY + 1, pX] - hm_[pY - 1, pX]])
+                preds[i, j].add_(diff.sign_().mul_(.25))
 
-    preds.add_(1)
+    preds.add_(-.5)
 
     preds_orig = torch.zeros(preds.size())
     if center is not None and scale is not None:
@@ -209,8 +208,13 @@ def shuffle_lr(parts, pairs=None):
 
 
 def flip(tensor, is_label=False):
+    was_cuda = False
     if isinstance(tensor, torch.Tensor):
         tensor = tensor.numpy()
+    elif isinstance(tensor, torch.cuda.FloatTensor):
+        tensor = tensor.cpu().numpy()
+        was_cuda = True
+
     was_squeezed = False
     if tensor.ndim == 4:
         tensor = np.squeeze(tensor)
@@ -223,4 +227,7 @@ def flip(tensor, is_label=False):
         tensor = cv2.flip(tensor, 1).reshape(tensor.shape)
     if was_squeezed:
         tensor = np.expand_dims(tensor, axis=0)
-    return torch.from_numpy(tensor)
+    tensor = torch.from_numpy(tensor)
+    if was_cuda:
+        tensor = tensor.cuda()
+    return tensor
